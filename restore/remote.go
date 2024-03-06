@@ -2,6 +2,7 @@ package restore
 
 import (
 	"fmt"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -50,6 +51,18 @@ func VerifyBackupFileCountOnSegments() {
 		// Coordinator backup files (and any gprestore report files) will be mixed in with segment backup files on a single-node cluster,
 		// so we explicitly look for filenames in the segment filename format.  In a smaller-to-larger restore, the contents list for a segment
 		// outside the destination array will be "[]", which the find command can handle safely in this context.
+
+		if runtime.GOOS == "darwin" {
+			var filenameArray []string
+			for i := 0; i < len(contentMap[contentID]); i++ {
+				filenameString := fmt.Sprintf(`"gpbackup_%s_%s*"`, contentMap[contentID][i], globalFPInfo.Timestamp)
+				filenameArray = append(filenameArray, filenameString)
+			}
+			cmdString := fmt.Sprintf(`find %s -type f -name `, globalFPInfo.GetDirForContent(contentID))
+			cmdString += strings.Join(filenameArray, " -o -name ")
+			cmdString += fmt.Sprintf(` | wc -l`)
+			return cmdString
+		}
 		contentsList := fmt.Sprintf("(%s)", strings.Join(contentMap[contentID], "|"))
 		cmdString := fmt.Sprintf(`find %s -type f -regextype posix-extended -regex ".*gpbackup_%s_%s.*" | wc -l`, globalFPInfo.GetDirForContent(contentID), contentsList, globalFPInfo.Timestamp)
 		return cmdString
